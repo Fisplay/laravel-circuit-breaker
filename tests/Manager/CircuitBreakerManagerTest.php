@@ -27,7 +27,7 @@ class CircuitBreakerManagerTest extends TestCase
     /** @var CircuitBreakerManager */
     private $manager;
 
-    public function setUp()
+    public function setUp(): void
     {
         parent::setUp();
 
@@ -53,15 +53,10 @@ class CircuitBreakerManagerTest extends TestCase
 
     public function testItShouldGetServiceAvailability()
     {
-        $this->storeMock->expects($this->at(0))
+        $this->storeMock
             ->method('isAvailable')
             ->with('service')
-            ->willReturn(false);
-
-        $this->storeMock->expects($this->at(1))
-            ->method('isAvailable')
-            ->with('service')
-            ->willReturn(true);
+            ->willReturnOnConsecutiveCalls(false, true);
 
         $this->assertFalse($this->manager->isAvailable('service'));
         $this->assertTrue($this->manager->isAvailable('service'));
@@ -113,17 +108,17 @@ class CircuitBreakerManagerTest extends TestCase
             ->method('reportFailure')
             ->with('service', 3, 1000, 5000);
 
-        $this->dispatcherMock->expects($this->at(0))
-            ->method('dispatch')
-            ->with($this->callback(function ($event) {
-                return $event instanceof AttemptFailed;
-            }));
+        $matcher = $this->exactly(2);
 
-        $this->dispatcherMock->expects($this->at(1))
+        $this->dispatcherMock
+            ->expects($matcher)
             ->method('dispatch')
-            ->with($this->callback(function ($event) {
-                return $event instanceof ServiceFailed;
-            }));
+            ->willReturnCallback(function ($event) use ($matcher) {
+                match ($matcher->getInvocationCount()) {
+                    1 => $this->assertInstanceOf(AttemptFailed::class, $event),
+                    2 => $this->assertInstanceOf(ServiceFailed::class, $event),
+                };
+            });
 
         $this->manager->reportFailure('service');
     }
